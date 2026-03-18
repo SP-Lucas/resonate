@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { RZStatusBadge } from './RZStatusBadge';
+import { useAuthOptional } from '@/lib/auth-context';
 
 type Module = {
   id: string;
@@ -331,6 +332,17 @@ function ChevronDownIcon() {
 export function AppShell({ children, currentModule }: AppShellProps) {
   const pathname = usePathname();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const auth = useAuthOptional();
+
+  // Don't render shell chrome on the login page
+  if (pathname === '/login') {
+    return <>{children}</>;
+  }
+
+  const userName = auth?.user?.name ?? 'Admin';
+  const userInitials = auth?.user?.name
+    ? auth.user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : 'AD';
 
   const activeModuleId = currentModule ?? modules.find((m) =>
     pathname.startsWith(m.path)
@@ -366,10 +378,10 @@ export function AppShell({ children, currentModule }: AppShellProps) {
               className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold flex-shrink-0"
               style={{ backgroundColor: '#0D6EFD', color: '#F1F5F9' }}
             >
-              AD
+              {userInitials}
             </div>
             <span className="text-sm font-medium" style={{ color: '#94A3B8' }}>
-              Admin
+              {userName}
             </span>
           </div>
         </div>
@@ -448,7 +460,7 @@ export function AppShell({ children, currentModule }: AppShellProps) {
                 className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold"
                 style={{ backgroundColor: '#1E3A5F', color: '#818CF8' }}
               >
-                AD
+                {userInitials}
               </div>
               <ChevronDownIcon />
             </button>
@@ -460,7 +472,6 @@ export function AppShell({ children, currentModule }: AppShellProps) {
                 {[
                   { label: 'Profile', href: '/profile' },
                   { label: 'Settings', href: '/settings' },
-                  { label: 'Sign out', href: '/signout' },
                 ].map((item) => (
                   <Link
                     key={item.href}
@@ -472,6 +483,13 @@ export function AppShell({ children, currentModule }: AppShellProps) {
                     {item.label}
                   </Link>
                 ))}
+                <button
+                  onClick={() => { setUserMenuOpen(false); auth?.logout(); }}
+                  className="block w-full text-left px-4 py-2 text-sm transition-colors"
+                  style={{ color: '#EF4444' }}
+                >
+                  Sign out
+                </button>
               </div>
             )}
           </div>

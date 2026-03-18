@@ -4,6 +4,7 @@ from app.models.ticket import Ticket, TicketStatus
 from app.models.threat import Threat
 from app.models.invoice import Invoice
 from app.models.contract import Contract
+from app.models.user import User
 
 __all__ = [
     "Client",
@@ -13,4 +14,5 @@ __all__ = [
     "Threat",
     "Invoice",
     "Contract",
+    "User",
 ]
