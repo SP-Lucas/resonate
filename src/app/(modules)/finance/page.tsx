@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   financeKpis,
   licenseRows,
@@ -16,6 +16,82 @@ function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 
+// ---------------------------------------------------------------------------
+// Animated count-up hook
+// ---------------------------------------------------------------------------
+function useCountUp(target: number, duration = 1200, enabled = true): number {
+  const [value, setValue] = useState(0);
+  const ranRef = useRef(false);
+
+  useEffect(() => {
+    if (!enabled || ranRef.current) return;
+    ranRef.current = true;
+    if (target === 0) { setValue(0); return; }
+    const steps = Math.ceil(duration / 16);
+    let step = 0;
+    const id = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      // ease-out quad
+      const eased = 1 - Math.pow(1 - progress, 2);
+      setValue(Math.round(target * eased));
+      if (step >= steps) { clearInterval(id); setValue(target); }
+    }, 16);
+    return () => clearInterval(id);
+  }, [target, duration, enabled]);
+
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// KPI animated card
+// ---------------------------------------------------------------------------
+function KpiCard({ kpi }: { kpi: (typeof financeKpis)[0] }) {
+  // Parse numeric portion from value string for count-up
+  const rawMatch = kpi.value.match(/[\d,]+(\.\d+)?/);
+  const rawNum = rawMatch ? parseFloat(rawMatch[0].replace(/,/g, '')) : null;
+  const animated = useCountUp(rawNum ?? 0, 1200, rawNum !== null);
+
+  function renderValue() {
+    if (rawNum === null) return kpi.value;
+    // Reconstruct: prefix ($ etc), number, suffix (% etc)
+    const prefixMatch = kpi.value.match(/^[^0-9]*/);
+    const suffixMatch = kpi.value.match(/[^0-9.]+$/);
+    const prefix = prefixMatch ? prefixMatch[0] : '';
+    const suffix = suffixMatch ? suffixMatch[0] : '';
+    // Format with commas if original had them
+    const needsComma = rawMatch![0].includes(',');
+    const display = needsComma
+      ? new Intl.NumberFormat('en-US').format(animated)
+      : String(animated);
+    return `${prefix}${display}${suffix}`;
+  }
+
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{ backgroundColor: '#0A1225', border: '1px solid #0F2040' }}
+    >
+      <p className="text-xs mb-2" style={{ ...sans, color: '#475569' }}>{kpi.label}</p>
+      <p className="text-2xl font-bold leading-none mb-1" style={{ ...mono, color: kpi.color }}>
+        {renderValue()}
+      </p>
+      <p className="text-xs" style={{ ...sans, color: '#475569' }}>{kpi.sub}</p>
+      <div className="mt-2 flex items-center gap-1">
+        <span
+          className="text-xs font-medium"
+          style={{ ...sans, color: kpi.trend === 'up' ? '#00D4AA' : kpi.trend === 'down' ? '#00D4AA' : '#94A3B8' }}
+        >
+          {kpi.trend === 'up' ? '↑' : kpi.trend === 'down' ? '↓' : '→'} {kpi.trendValue}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Status pills
+// ---------------------------------------------------------------------------
 function StatusPill({ status }: { status: 'match' | 'over' | 'under' }) {
   const map = {
     match: { label: 'MATCH', bg: '#052e16', color: '#00D4AA', border: '#166534' },
@@ -66,6 +142,114 @@ function RZBadge({ lastSync }: { lastSync: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Month-end close stepper
+// ---------------------------------------------------------------------------
+const CLOSE_STAGES = [
+  'GL Close',
+  'AR Reconcile',
+  'Invoice Generation',
+  'Report Generation',
+  'Complete',
+];
+const CURRENT_STAGE_INDEX = 2; // "Invoice Generation" is in progress
+
+function MonthEndStepper() {
+  return (
+    <div className="rounded-xl p-5" style={{ backgroundColor: '#0A1225', border: '1px solid #0F2040' }}>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold" style={{ ...sans, color: '#F1F5F9' }}>Month-End Close Status</h3>
+          <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>Mar 2026 · Closed Mar 5</p>
+        </div>
+        <span className="text-xs font-bold px-2 py-1 rounded" style={{ ...mono, backgroundColor: '#0a1a2e', color: '#818CF8', border: '1px solid #818CF844' }}>
+          IN PROGRESS
+        </span>
+      </div>
+      <div className="flex items-center gap-0">
+        {CLOSE_STAGES.map((stage, idx) => {
+          const completed = idx < CURRENT_STAGE_INDEX;
+          const current = idx === CURRENT_STAGE_INDEX;
+          const pending = idx > CURRENT_STAGE_INDEX;
+          const isLast = idx === CLOSE_STAGES.length - 1;
+
+          return (
+            <div key={stage} className="flex items-center" style={{ flex: isLast ? 'none' : 1 }}>
+              {/* Node + label */}
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className="relative flex items-center justify-center rounded-full"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    backgroundColor: completed ? '#052e16' : current ? '#051a14' : '#060D1A',
+                    border: completed
+                      ? '2px solid #00D4AA'
+                      : current
+                      ? '2px solid #00D4AA'
+                      : '2px solid #0F2040',
+                  }}
+                >
+                  {completed && (
+                    <span style={{ color: '#00D4AA', fontSize: 13, fontWeight: 700 }}>✓</span>
+                  )}
+                  {current && (
+                    <span
+                      className="animate-ping absolute inline-flex rounded-full"
+                      style={{ width: 12, height: 12, backgroundColor: '#00D4AA', opacity: 0.4 }}
+                    />
+                  )}
+                  {current && (
+                    <span
+                      className="relative inline-flex rounded-full"
+                      style={{ width: 8, height: 8, backgroundColor: '#00D4AA' }}
+                    />
+                  )}
+                  {pending && (
+                    <span
+                      className="inline-flex rounded-full"
+                      style={{ width: 8, height: 8, backgroundColor: '#1E3A5F' }}
+                    />
+                  )}
+                </div>
+                <span
+                  className="text-xs text-center"
+                  style={{
+                    ...sans,
+                    color: completed ? '#00D4AA' : current ? '#F1F5F9' : '#475569',
+                    fontWeight: current ? 700 : 400,
+                    whiteSpace: 'nowrap',
+                    fontSize: 10,
+                    maxWidth: 80,
+                    lineHeight: '1.3',
+                  }}
+                >
+                  {stage}
+                </span>
+              </div>
+              {/* Connector line */}
+              {!isLast && (
+                <div
+                  style={{
+                    flex: 1,
+                    height: 2,
+                    marginBottom: 20,
+                    backgroundColor: completed ? '#00D4AA' : '#0F2040',
+                    transition: 'background-color 0.3s',
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Invoice panel
+// ---------------------------------------------------------------------------
 function InvoicePanel() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -180,20 +364,46 @@ function InvoicePanel() {
             />
           </div>
           {done && (
-            <div className="mt-3 flex gap-3">
-              <div className="flex-1 p-3 rounded-lg text-center" style={{ backgroundColor: '#052e16', border: '1px solid #166534' }}>
-                <p className="text-xs font-bold" style={{ ...mono, color: '#00D4AA' }}>247 INVOICES SENT</p>
-                <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>via email + portal</p>
+            <>
+              {/* Completion banner */}
+              <div
+                className="mt-3 flex items-center justify-between px-4 py-3 rounded-lg"
+                style={{ backgroundColor: '#052e16', border: '1px solid #166534' }}
+              >
+                <div className="flex items-center gap-3">
+                  <span style={{ color: '#00D4AA', fontSize: 20 }}>✓</span>
+                  <div>
+                    <p className="text-sm font-bold" style={{ ...mono, color: '#00D4AA' }}>Completed in 0:18</p>
+                    <p className="text-xs" style={{ ...sans, color: '#475569' }}>247 invoices processed successfully</p>
+                  </div>
+                </div>
+                <button
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all hover:opacity-90"
+                  style={{ ...sans, backgroundColor: 'transparent', color: '#00D4AA', border: '1.5px solid #00D4AA' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download PDF Report
+                </button>
               </div>
-              <div className="flex-1 p-3 rounded-lg text-center" style={{ backgroundColor: '#0a1a2e', border: '1px solid #0D6EFD44' }}>
-                <p className="text-xs font-bold" style={{ ...mono, color: '#0D6EFD' }}>QB SYNCED</p>
-                <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>QuickBooks updated</p>
+              <div className="mt-3 flex gap-3">
+                <div className="flex-1 p-3 rounded-lg text-center" style={{ backgroundColor: '#052e16', border: '1px solid #166534' }}>
+                  <p className="text-xs font-bold" style={{ ...mono, color: '#00D4AA' }}>247 INVOICES SENT</p>
+                  <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>via email + portal</p>
+                </div>
+                <div className="flex-1 p-3 rounded-lg text-center" style={{ backgroundColor: '#0a1a2e', border: '1px solid #0D6EFD44' }}>
+                  <p className="text-xs font-bold" style={{ ...mono, color: '#0D6EFD' }}>QB SYNCED</p>
+                  <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>QuickBooks updated</p>
+                </div>
+                <div className="flex-1 p-3 rounded-lg text-center" style={{ backgroundColor: '#1c1028', border: '1px solid #818CF844' }}>
+                  <p className="text-xs font-bold" style={{ ...mono, color: '#818CF8' }}>17 MIN 42 SEC</p>
+                  <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>total elapsed time</p>
+                </div>
               </div>
-              <div className="flex-1 p-3 rounded-lg text-center" style={{ backgroundColor: '#1c1028', border: '1px solid #818CF844' }}>
-                <p className="text-xs font-bold" style={{ ...mono, color: '#818CF8' }}>17 MIN 42 SEC</p>
-                <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>total elapsed time</p>
-              </div>
-            </div>
+            </>
           )}
         </div>
       )}
@@ -201,8 +411,22 @@ function InvoicePanel() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// AR Aging chart with mount animation
+// ---------------------------------------------------------------------------
 function ARAgingChart() {
+  const [mounted, setMounted] = useState(false);
+  const ranRef = useRef(false);
+
+  useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+    const id = setTimeout(() => setMounted(true), 100);
+    return () => clearTimeout(id);
+  }, []);
+
   const total = arAgingBuckets.reduce((s, b) => s + b.amount, 0);
+
   return (
     <div className="rounded-xl p-5" style={{ backgroundColor: '#0A1225', border: '1px solid #0F2040' }}>
       <div className="flex items-center justify-between mb-4">
@@ -225,8 +449,13 @@ function ARAgingChart() {
               </div>
               <div className="relative h-6 rounded" style={{ backgroundColor: '#060D1A' }}>
                 <div
-                  className="absolute left-0 top-0 h-full rounded transition-all"
-                  style={{ width: `${pct}%`, backgroundColor: bucket.color, opacity: 0.85 }}
+                  className="absolute left-0 top-0 h-full rounded"
+                  style={{
+                    width: mounted ? `${pct}%` : '0%',
+                    backgroundColor: bucket.color,
+                    opacity: 0.85,
+                    transition: 'width 1s ease-out',
+                  }}
                 />
                 <div className="absolute left-2 top-1/2 -translate-y-1/2">
                   <span className="text-xs font-bold" style={{ ...mono, color: '#070D1A', mixBlendMode: 'normal' }}>
@@ -242,8 +471,125 @@ function ARAgingChart() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// License reconciliation panel with Sync Now
+// ---------------------------------------------------------------------------
+type SyncState = 'idle' | 'syncing' | 'done';
+
+function LicensePanel() {
+  const [syncState, setSyncState] = useState<SyncState>('idle');
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSync() {
+    if (syncState === 'syncing') return;
+    setSyncState('syncing');
+    syncTimerRef.current = setTimeout(() => {
+      setSyncState('done');
+    }, 2000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []);
+
+  return (
+    <div
+      className="col-span-2 rounded-xl p-5 transition-all duration-300"
+      style={{
+        backgroundColor: '#0A1225',
+        border: syncState === 'syncing' ? '1px solid #00D4AA' : '1px solid #0F2040',
+        boxShadow: syncState === 'syncing' ? '0 0 0 2px #00D4AA33' : 'none',
+        animation: syncState === 'syncing' ? 'pulseBorder 1s ease-in-out infinite' : 'none',
+      }}
+    >
+      <style>{`
+        @keyframes pulseBorder {
+          0%, 100% { box-shadow: 0 0 0 2px #00D4AA22; }
+          50%       { box-shadow: 0 0 0 4px #00D4AA44; }
+        }
+      `}</style>
+
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold" style={{ ...sans, color: '#F1F5F9' }}>Microsoft 365 License Reconciliation</h3>
+          <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>
+            {licenseRows.filter(r => r.status === 'over').length} over-provisioned ·{' '}
+            {licenseRows.filter(r => r.status === 'under').length} under-provisioned ·{' '}
+            {licenseRows.filter(r => r.status === 'match').length} matched
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Sync status text */}
+          {syncState === 'syncing' && (
+            <span className="text-xs flex items-center gap-1.5" style={{ ...mono, color: '#00D4AA' }}>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: '#00D4AA' }} />
+                <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: '#00D4AA' }} />
+              </span>
+              Syncing with Azure AD...
+            </span>
+          )}
+          {syncState === 'done' && (
+            <span className="text-xs font-bold" style={{ ...mono, color: '#00D4AA' }}>✓ Last sync: just now</span>
+          )}
+          {syncState === 'idle' && <RZBadge lastSync="auto-reconciled" />}
+          <button
+            onClick={handleSync}
+            disabled={syncState === 'syncing'}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:opacity-90 disabled:opacity-60"
+            style={{ ...sans, backgroundColor: '#051a14', color: '#00D4AA', border: '1px solid #00D4AA44' }}
+          >
+            {syncState === 'syncing' ? 'Syncing...' : 'Sync Now'}
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ borderBottom: '1px solid #0F2040' }}>
+              {['Client', 'Licensed', 'Deployed', 'Delta', 'Monthly Cost', 'Status'].map(h => (
+                <th key={h} className="pb-2 text-left font-medium" style={{ ...sans, color: '#475569' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {licenseRows.map((row, i) => (
+              <tr
+                key={row.client}
+                style={{ borderBottom: i < licenseRows.length - 1 ? '1px solid #0a1830' : 'none' }}
+                className="hover:bg-white/5 transition-colors"
+              >
+                <td className="py-2.5 pr-4" style={{ ...sans, color: '#F1F5F9' }}>{row.client}</td>
+                <td className="py-2.5 pr-4" style={{ ...mono, color: '#94A3B8' }}>{row.licensed}</td>
+                <td className="py-2.5 pr-4" style={{ ...mono, color: '#94A3B8' }}>{row.deployed}</td>
+                <td className="py-2.5 pr-4">
+                  <span style={{ ...mono, color: row.delta > 0 ? '#F59E0B' : row.delta < 0 ? '#94A3B8' : '#00D4AA', fontWeight: 700 }}>
+                    {row.delta > 0 ? `+${row.delta}` : row.delta}
+                  </span>
+                </td>
+                <td className="py-2.5 pr-4" style={{ ...mono, color: '#F1F5F9' }}>{fmt(row.monthlyCost)}</td>
+                <td className="py-2.5"><StatusPill status={row.status} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 export default function FinancePage() {
-  const [now] = useState(() => new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
+  const [now] = useState(() =>
+    new Date().toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+  );
 
   return (
     <div className="min-h-screen p-6" style={{ backgroundColor: '#070D1A' }}>
@@ -266,71 +612,14 @@ export default function FinancePage() {
       {/* KPI Row */}
       <div className="grid grid-cols-5 gap-3 mb-6">
         {financeKpis.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-xl p-4"
-            style={{ backgroundColor: '#0A1225', border: '1px solid #0F2040' }}
-          >
-            <p className="text-xs mb-2" style={{ ...sans, color: '#475569' }}>{kpi.label}</p>
-            <p className="text-2xl font-bold leading-none mb-1" style={{ ...mono, color: kpi.color }}>{kpi.value}</p>
-            <p className="text-xs" style={{ ...sans, color: '#475569' }}>{kpi.sub}</p>
-            <div className="mt-2 flex items-center gap-1">
-              <span
-                className="text-xs font-medium"
-                style={{ ...sans, color: kpi.trend === 'up' ? '#00D4AA' : kpi.trend === 'down' ? '#00D4AA' : '#94A3B8' }}
-              >
-                {kpi.trend === 'up' ? '↑' : kpi.trend === 'down' ? '↓' : '→'} {kpi.trendValue}
-              </span>
-            </div>
-          </div>
+          <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
       {/* Main grid */}
       <div className="grid grid-cols-3 gap-4 mb-4">
         {/* License Reconciliation — 2 cols */}
-        <div className="col-span-2 rounded-xl p-5" style={{ backgroundColor: '#0A1225', border: '1px solid #0F2040' }}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold" style={{ ...sans, color: '#F1F5F9' }}>Microsoft 365 License Reconciliation</h3>
-              <p className="text-xs mt-0.5" style={{ ...sans, color: '#475569' }}>
-                {licenseRows.filter(r => r.status === 'over').length} over-provisioned · {licenseRows.filter(r => r.status === 'under').length} under-provisioned · {licenseRows.filter(r => r.status === 'match').length} matched
-              </p>
-            </div>
-            <RZBadge lastSync="auto-reconciled" />
-          </div>
-          <div className="overflow-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: '1px solid #0F2040' }}>
-                  {['Client', 'Licensed', 'Deployed', 'Delta', 'Monthly Cost', 'Status'].map(h => (
-                    <th key={h} className="pb-2 text-left font-medium" style={{ ...sans, color: '#475569' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {licenseRows.map((row, i) => (
-                  <tr
-                    key={row.client}
-                    style={{ borderBottom: i < licenseRows.length - 1 ? '1px solid #0a1830' : 'none' }}
-                    className="hover:bg-white/5 transition-colors"
-                  >
-                    <td className="py-2.5 pr-4" style={{ ...sans, color: '#F1F5F9' }}>{row.client}</td>
-                    <td className="py-2.5 pr-4" style={{ ...mono, color: '#94A3B8' }}>{row.licensed}</td>
-                    <td className="py-2.5 pr-4" style={{ ...mono, color: '#94A3B8' }}>{row.deployed}</td>
-                    <td className="py-2.5 pr-4">
-                      <span style={{ ...mono, color: row.delta > 0 ? '#F59E0B' : row.delta < 0 ? '#94A3B8' : '#00D4AA', fontWeight: 700 }}>
-                        {row.delta > 0 ? `+${row.delta}` : row.delta}
-                      </span>
-                    </td>
-                    <td className="py-2.5 pr-4" style={{ ...mono, color: '#F1F5F9' }}>{fmt(row.monthlyCost)}</td>
-                    <td className="py-2.5"><StatusPill status={row.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <LicensePanel />
 
         {/* AR Aging */}
         <ARAgingChart />
@@ -339,6 +628,11 @@ export default function FinancePage() {
       {/* Invoice Generation */}
       <div className="mb-4">
         <InvoicePanel />
+      </div>
+
+      {/* Month-end close stepper */}
+      <div className="mb-4">
+        <MonthEndStepper />
       </div>
 
       {/* Bottom grid: Payroll + Recent Transactions */}
