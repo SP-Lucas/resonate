@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Resonate — AI-First MSP Operating System
+
+> Replace 20+ tools with one intelligent platform. 70% headcount reduction. 42% margins. 8-second incident response.
+
+## Modules
+
+| Module | Key Metric |
+|--------|------------|
+| **Service Desk** | 12s resolution · AI dispatch · 90% auto-resolved |
+| **NetOps / SOC** | 8s threat response · 95% auto-remediated |
+| **Finance** | 4hr month-end close · 11-day DSO · auto-invoicing |
+| **Procurement** | 10%+ savings · multi-distributor price comparison |
+| **CRM** | 34% close rate · 5min CPQ quotes · AI lead scoring |
+| **Contracts** | Zero missed renewals · $1.2M+ protected |
+| **Security** | Zero Trust · SOC 2 · HIPAA · PCI DSS · ISO 27001 |
+
+## Stack
+
+- **Frontend:** Next.js 14 · Tailwind v4 · shadcn/ui · TypeScript
+- **Backend:** FastAPI · PostgreSQL 15 · Redis · SQLAlchemy async
+- **AI:** Anthropic Claude (dispatch, insights, summaries)
+- **Design:** Dark navy (#070D1A) + teal (#00D4AA) · DM Sans + Space Mono
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Frontend
+npm install && npm run dev        # http://localhost:3000
+
+# Full stack
+cp .env.example .env              # add ANTHROPIC_API_KEY
+docker compose up                 # frontend :3000, API :8000
+
+# Backend only
+cd backend && poetry install
+uvicorn app.main:app --reload     # http://localhost:8000/docs
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+resonate/
+├── src/app/(modules)/   # 7 module pages
+├── src/components/      # AppShell, ModuleCard, TicketCard, SLATimer...
+├── src/lib/mock-data/   # Typed mock data for all modules
+├── backend/app/         # FastAPI — models, schemas, routers, AI
+└── docker-compose.yml
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Business Case
 
-## Learn More
+- **TAM:** $50B · 60,000+ MSPs globally
+- **ROI:** 3,153% Year 1 for avg MSP customer
+- **Exit:** $500M–$1B (Year 5–7)
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*Built with Claude AI*
